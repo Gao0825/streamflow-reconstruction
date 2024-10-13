@@ -42,7 +42,7 @@ for file_name in os.listdir(train_dir):
 
         end_time = time.time() 
         run_time = end_time - start_time  
-        print(f"程序运行的时间为：{run_time}秒")
+        print(f"time：{run_time}秒")
 
         result_file = os.path.join(output_dir, f"{os.path.splitext(file_name)[0]}_result_re_RF.csv")
         pred = pd.DataFrame({'y_pred': y_pred})
