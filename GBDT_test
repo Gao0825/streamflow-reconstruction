@@ -1,0 +1,91 @@
+# -*- coding = utf-8 -*-
+# @Time : 2023/9/23 22:54
+# @Author : gao
+# @File : GBDT_test.py
+
+import os
+import time
+import pandas as pd
+import numpy as np
+import pydotplus
+from pydotplus import graph_from_dot_data
+from sklearn.tree import export_graphviz
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.ensemble import GradientBoostingRegressor
+from scipy.stats import pearsonr
+from sklearn.model_selection import cross_val_score, KFold, train_test_split
+
+train_dir = r"G:\Desktop\data processing\research data\input data\train_nona"
+output_dir = r"G:\Desktop\data processing\research data\input data\results\GBDT"
+
+result_df = pd.DataFrame(columns=["GBDT", "r_scores", "nse_scores", "kge_scores"])
+
+for file_name in os.listdir(train_dir):
+    if file_name.endswith(".csv"):
+        start_time = time.time() 
+
+        train_data = pd.read_csv(os.path.join(train_dir, file_name))
+
+        train_data_nona = train_data.dropna(axis=0, how='any')
+
+        X = train_data_nona[['pre', 'temp', 'wind', 'pet', 'SMsurf', 'SMroot']]
+        y = train_data_nona['runoff']
+
+        r_scores = []
+        nse_scores = []
+        kge_scores = []
+
+        k = 5 
+        kf = KFold(n_splits=k, shuffle=True, random_state=42)
+
+        for train_index, test_index in kf.split(X):
+            X_train, X_test = X.iloc[train_index], X.iloc[test_index]
+            y_train, y_test = y.iloc[train_index], y.iloc[test_index]
+
+            scaler = MinMaxScaler()
+            X_train_norm = scaler.fit_transform(X_train)
+            X_test_norm = scaler.transform(X_test)
+
+            gbdt = GradientBoostingRegressor(n_estimators=1000, learning_rate=0.01, max_depth=15, max_features='sqrt',
+                                             min_samples_leaf=10, min_samples_split=10, random_state=42)
+
+            gbdt.fit(X_train_norm, y_train)
+
+            y_pred = gbdt.predict(X_test_norm)
+
+            r = pearsonr(y_test, y_pred)
+            print("r:", r)
+            r_scores.append(r[0])
+
+            # NSE
+            def nse(y_test, y_pred):
+                mean_y_test = np.mean(y_test)
+                numerator = np.sum((y_test - y_pred) ** 2)
+                denominator = np.sum((y_test - mean_y_test) ** 2)
+                nse_value = 1 - numerator / denominator
+                return nse_value
+            nse_value = nse(y_test, y_pred)
+            print('NSE:', nse_value)
+            nse_scores.append(nse_value)
+
+            # KGE
+            def calculate_kge(y_test, y_pred):
+                r = np.corrcoef(y_test, y_pred)[0, 1]  # 计算相关系数
+                alpha = np.std(y_pred) / np.std(y_test)  # 计算标准差比例
+                beta = np.mean(y_pred) / np.mean(y_test)  # 计算均值比例
+                kge = 1 - np.sqrt((r - 1) ** 2 + (alpha - 1) ** 2 + (beta - 1) ** 2)  # 计算KGE
+                return kge
+            kge_value = calculate_kge(y_test, y_pred)
+            print("KGE:", kge_value)
+            kge_scores.append(kge_value)
+
+        result_df = pd.concat([result_df, pd.DataFrame({"GBDT": [file_name],
+                                                        "r_scores": np.mean(r_scores),
+                                                        "nse_scores": np.mean(nse_scores),
+                                                        "kge_scores": np.mean(kge_scores)})],
+                              ignore_index=True)
+
+result_file_path = os.path.join(output_dir, "result_GBDT_交叉验证_训练集.csv")
+result_df.to_csv(result_file_path, index=False)
+
+print("所有结果已保存到文件中：", result_file_path)
