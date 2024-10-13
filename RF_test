@@ -35,7 +35,7 @@ for file_name in os.listdir(train_dir):
         nse_scores = []
         kge_scores = []
 
-        k = 5  # K的值
+        k = 5
         kf = KFold(n_splits=k, shuffle=True, random_state=42)
 
         for train_index, test_index in kf.split(X):
