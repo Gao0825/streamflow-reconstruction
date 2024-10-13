@@ -1,0 +1,60 @@
+# -*- coding = utf-8 -*-
+# @Time : 2023/10/13 21:23
+# @Author : gao
+# @File : XGBoost_reconstruction.py
+
+
+import os
+import time
+import pandas as pd
+import numpy as np
+import pydotplus
+
+from sklearn.tree import export_graphviz
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import cross_val_score, KFold, train_test_split
+from sklearn import datasets
+from xgboost.sklearn import XGBRegressor
+
+train_dir = r"G:\Desktop\data processing\research data\input data\train_nona"
+output_dir = r"G:\Desktop\data processing\research data\input data\results\XGBoost\XGBoost_result"
+
+# 遍历训练数据集的CSV文件
+for file_name in os.listdir(train_dir):
+    if file_name.endswith(".csv"):
+        start_time = time.time()  # 程序开始时间
+
+        # 读入训练数据集
+        train_data = pd.read_csv(os.path.join(train_dir, file_name))
+
+        X = train_data[['pre', 'temp', 'wind', 'pet', 'SMsurf', 'SMroot']]
+
+        # 删除含有nan的行
+        train_data_nona = train_data.dropna(axis=0, how='any')
+
+        # 分离特征和目标变量
+        X_train = train_data_nona[['pre', 'temp', 'wind', 'pet', 'SMsurf', 'SMroot']]
+        y_train = train_data_nona['runoff']
+
+        # 数据归一化
+        scaler = MinMaxScaler()
+        X_train_norm = scaler.fit_transform(X_train)
+        X_norm = scaler.transform(X)
+
+        # 初始化XGBoost回归模型
+        XGBoost = XGBRegressor(max_depth=8, learning_rate=0.01, n_estimators=800, random_state=42)
+
+        # 训练梯度提升树回归模型
+        XGBoost.fit(X_train_norm, y_train)
+
+        # 重建径流数据
+        y_pred = XGBoost.predict(X_norm)
+
+        end_time = time.time()  # 程序结束时间
+        run_time = end_time - start_time  # 程序运行时间
+        print(f"程序运行的时间为：{run_time}秒")
+
+        # 保存预测结果
+        result_file = os.path.join(output_dir, f"{os.path.splitext(file_name)[0]}_result_re_XGBoost.csv")
+        pred = pd.DataFrame({'y_pred': y_pred})
+        pred.to_csv(result_file, index=False)
